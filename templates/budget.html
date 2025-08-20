@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0">Budget Bulanan per Kategori</h5>
+  <a class="btn btn-outline-secondary" href="{{ url_for('dashboard') }}">⬅️ Dashboard</a>
+</div>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-3">
+    <select class="form-select" name="month">
+      {% for m in months_list %}
+        <option value="{{ m }}" {{ 'selected' if sel_month==m else '' }}>Bulan {{ '%02d'|format(m) }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" name="year">
+      {% for y in years_list %}
+        <option value="{{ y }}" {{ 'selected' if sel_year==y else '' }}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3"><button class="btn btn-primary w-100" type="submit">Terapkan Periode</button></div>
+  <div class="col-md-3"><a class="btn btn-outline-secondary w-100" href="{{ url_for('budget') }}">Periode: Bulan Ini</a></div>
+</form>
+
+<form method="post" id="budgetForm">
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="min-width:180px">Kategori</th>
+            <th class="text-end" style="min-width:120px">Spent</th>
+            <th class="text-end" style="min-width:160px">Budget/bln</th>
+            <th class="text-end" style="min-width:120px">Sisa</th>
+            <th style="width:30%">Progress</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+            {% set cat = it.cat %}
+            {% set spent = it.spent %}
+            {% set budget = it.budget %}
+            {% set remain = it.remain %}
+            {% set pct = it.pct %}
+            {% set status = (pct is not none and pct >= 100) and 'danger' or (pct is not none and pct >= 80) and 'warning' or 'success' %}
+          <tr>
+            <td>{{ cat.name }}</td>
+            <td class="text-end">Rp {{ "{:,.0f}".format(spent).replace(",", ".") }}</td>
+            <td class="text-end">
+              <input class="form-control form-control-sm text-end budget-input"
+                     name="budget_{{ cat.id }}"
+                     type="number" step="0.01"
+                     value="{{ budget if budget is not none }}">
+            </td>
+            <td class="text-end">
+              {% if remain is not none %}
+                Rp {{ "{:,.0f}".format(remain).replace(",", ".") }}
+              {% else %}-{% endif %}
+            </td>
+            <td>
+              {% if pct is not none %}
+                <div class="d-flex justify-content-between small">
+                  <span>{{ pct|round(0) }}%</span>
+                  <span>Rp {{ "{:,.0f}".format(budget).replace(",", ".") }}</span>
+                </div>
+                <div class="progress" role="progressbar" aria-valuenow="{{ pct|round(0) }}" aria-valuemin="0" aria-valuemax="100">
+                  <div class="progress-bar bg-{{ status }}" data-w="{{ pct|round(0) }}"></div>
+                </div>
+              {% else %}
+                <span class="text-muted">Belum ada budget</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted">Belum ada kategori EXPENSE. Tambahkan transaksi dulu.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="p-3 d-flex flex-wrap gap-2 justify-content-between">
+      <div class="d-flex gap-2">
+        <input id="fillValue" type="number" step="0.01" class="form-control form-control-sm" placeholder="Isi semua budget kosong (Rp)">
+        <button type="button" id="btnFill" class="btn btn-sm btn-outline-secondary">Isi yang kosong</button>
+        <button type="button" id="btnClear" class="btn btn-sm btn-outline-danger">Kosongkan semua</button>
+      </div>
+      <div><button class="btn btn-primary">Simpan Perubahan</button></div>
+    </div>
+  </div>
+</form>
+
+
+
+
+<!-- JS kecil untuk helper budget + lebar progress -->
+<script>
+  (function(){
+    const fillInput = document.getElementById('fillValue');
+    const btnFill   = document.getElementById('btnFill');
+    const btnClear  = document.getElementById('btnClear');
+    const inputs    = document.querySelectorAll('.budget-input');
+
+    btnFill?.addEventListener('click', () => {
+      const v = (fillInput?.value || '').trim();
+      if (!v) return;
+      inputs.forEach(i => { if (!i.value) i.value = v; });
+    });
+
+    btnClear?.addEventListener('click', () => {
+      if (!confirm('Kosongkan semua budget?')) return;
+      inputs.forEach(i => { i.value = ''; });
+    });
+
+    // set width progress dari data attribute (hindari inline style + Jinja)
+    document.querySelectorAll('.progress-bar[data-w]').forEach(el => {
+      const w = Number(el.getAttribute('data-w')) || 0;
+      el.style.width = w + '%';
+    });
+  })();
+</script>
+<!-- Simpan sebagai logo.svg -->
+{% endblock %}

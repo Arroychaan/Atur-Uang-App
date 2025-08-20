@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Ringkasan -->
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="card"><div class="card-body">
+      <h6 class="text-muted mb-1">Total Income</h6>
+      <h4 class="mb-0">Rp {{ "{:,.0f}".format(income).replace(",", ".") }}</h4>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card"><div class="card-body">
+      <h6 class="text-muted mb-1">Total Expense</h6>
+      <h4 class="mb-0">Rp {{ "{:,.0f}".format(expense).replace(",", ".") }}</h4>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card"><div class="card-body">
+      <h6 class="text-muted mb-1">Balance</h6>
+      <h4 class="mb-0">Rp {{ "{:,.0f}".format(balance).replace(",", ".") }}</h4>
+    </div></div>
+  </div>
+</div>
+
+<!-- Filter tahun -->
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-3">
+    <select class="form-select" name="year">
+      <option value="">Semua Tahun</option>
+      {% for y in years_list %}
+        <option value="{{ y }}" {{ 'selected' if sel_year and sel_year==y else '' }}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <button class="btn btn-primary w-100" type="submit">Terapkan ke Grafik</button>
+  </div>
+  <div class="col-md-3">
+    <a class="btn btn-outline-secondary w-100" href="{{ url_for('dashboard') }}">Reset</a>
+  </div>
+</form>
+
+<!-- Grafik -->
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card"><div class="card-body">
+      <h6 class="mb-3">Income vs Expense{% if sel_year %} ({{ sel_year }}){% endif %}</h6>
+      <div class="chart-box"><canvas id="monthlyChart"></canvas></div>
+    </div></div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card"><div class="card-body">
+      <h6 class="mb-3">Expense by Category ({{ '%02d'|format(now_m) }}/{{ now_y }})</h6>
+      <div class="chart-box"><canvas id="categoryChart"></canvas></div>
+      {% if not cat_labels %}<div class="text-muted small mt-2">Belum ada data bulan ini.</div>{% endif %}
+    </div></div>
+  </div>
+</div>
+
+<!-- Tabel transaksi terakhir -->
+<div class="card">
+  <div class="card-body table-responsive">
+    <h6 class="mb-2">Transaksi Terakhir</h6>
+    <table class="table table-modern">
+      <thead>
+        <tr>
+          <th>Tanggal</th><th>Jenis</th><th>Kategori</th>
+          <th class="text-end">Nominal</th><th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in last_tx %}
+        <tr>
+          <td><span class="td-label">Tanggal</span><span class="td-value">{{ t.tx_date.strftime("%d-%m-%Y") }}</span></td>
+          <td>
+            <span class="td-label">Jenis</span>
+            <span class="td-value">
+              {% if t.type=='INCOME' %}<span class="badge bg-success">INCOME</span>
+              {% else %}<span class="badge bg-danger">EXPENSE</span>{% endif %}
+            </span>
+          </td>
+          <td><span class="td-label">Kategori</span><span class="td-value">{{ t.category }}</span></td>
+          <td class="text-end"><span class="td-label">Nominal</span><span class="td-value">Rp {{ "{:,.0f}".format(t.amount).replace(",", ".") }}</span></td>
+          <td><span class="td-label">Keterangan</span><span class="td-value">{{ t.note }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-3">Belum ada transaksi.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- FAB Tambah (muncul di HP) -->
+<a href="{{ url_for('add_transaction') }}" class="btn btn-primary fab-add d-sm-none">+ Tambah</a>
+
+<!-- Data island JSON -->
+<script id="dashboard-data" type="application/json">
+{{ {
+  "labels": chart_labels,
+  "income": chart_income,
+  "expense": chart_expense,
+  "catLabels": cat_labels,
+  "catValues": cat_values
+}|tojson }}
+</script>
+
+<!-- Chart rendering + theme sync -->
+<script>
+  // Ambil payload
+  let payload = { labels: [], income: [], expense: [], catLabels: [], catValues: [] };
+  try { payload = JSON.parse(document.getElementById('dashboard-data')?.textContent || "{}"); } catch {}
+
+  // CSS helpers
+  const css = () => getComputedStyle(document.documentElement);
+  const getVar = (name, fallback='#999') => (css().getPropertyValue(name).trim() || fallback);
+
+  const charts = [];
+  function applyChartThemeDefaults(){
+    Chart.defaults.color = getVar('--text', '#e9ecef');
+    Chart.defaults.borderColor = getVar('--border', '#2a2a2a');
+  }
+
+  function buildCharts(){
+    // destroy lama
+    while (charts.length) charts.pop().destroy();
+    applyChartThemeDefaults();
+
+    const incomeColor  = getVar('--income-color','#4e79a7');
+    const expenseColor = getVar('--expense-color','#e15759');
+    const axisColor    = getVar('--chart-axis','#aaa');
+    const gridColor    = 'rgba(170,170,170,0.25)';
+
+    // BAR
+    const elBar = document.getElementById('monthlyChart');
+    if (elBar){
+      charts.push(new Chart(elBar, {
+        type:'bar',
+        data:{
+          labels: payload.labels || [],
+          datasets:[
+            {label:'Income',  data: payload.income  || [], backgroundColor: incomeColor },
+            {label:'Expense', data: payload.expense || [], backgroundColor: expenseColor}
+          ]
+        },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          scales:{
+            x:{ ticks:{ color:axisColor }, grid:{ color:gridColor, drawBorder:false } },
+            y:{ beginAtZero:true, ticks:{ color:axisColor }, grid:{ color:gridColor, drawBorder:false } }
+          },
+          plugins:{ legend:{ labels:{ boxWidth:14 } } }
+        }
+      }));
+    }
+
+    // DONUT
+    const donutColors = [
+      getVar('--donut-1','#4e79a7'),
+      getVar('--donut-2','#f28e2b'),
+      getVar('--donut-3','#76b7b2'),
+      getVar('--donut-4','#59a14f'),
+      getVar('--donut-5','#edc949')
+    ];
+    const elDonut = document.getElementById('categoryChart');
+    if (elDonut){
+      charts.push(new Chart(elDonut, {
+        type:'doughnut',
+        data:{ labels: payload.catLabels || [], datasets:[{ data: payload.catValues || [], backgroundColor: donutColors }] },
+        options:{
+          responsive:true, maintainAspectRatio:false, cutout:'60%',
+          plugins:{ legend:{ labels:{ color: getVar('--text','#f5f7fa') } } }
+        }
+      }));
+    }
+  }
+
+  buildCharts();
+  window.addEventListener('ft-theme-changed', buildCharts);
+</script>
+
+{% endblock %}

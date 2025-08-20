@@ -1,0 +1,9 @@
+{
+  "files.associations": {
+    "**/templates/*.html": "jinja-html",
+    "**/templates/**/*.html": "jinja-html"
+  },
+  "python.analysis.typeCheckingMode": "basic",
+  "css.validate": true,
+  "css.lint.unknownAtRules": "ignore"
+}
